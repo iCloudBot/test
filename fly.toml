@@ -1,0 +1,32 @@
+# fly.toml app configuration file generated for crproxy on 2024-06-30T16:24:17+08:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'crproxy'
+primary_region = 'hkg'  # 香港地区
+kill_signal = "SIGTERM"
+kill_timeout = 120
+
+[build]
+  image = "registry.cn-chengdu.aliyuncs.com/clever/yanjh-cr-nginx" # 指定已有镜像
+
+[http_service]
+  internal_port = 80             # 容器端口
+  force_https = true             # 强制执行 HTTP 到 HTTPS 重定向
+  auto_stop_machines = false     # 没有流量时不停止
+  auto_start_machines = false    # 容量不足时不启动
+  min_machines_running = 1
+  processes = ['app']
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+    force_https = true  # optional
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+[[vm]]
+  size = 'shared-cpu-1x'

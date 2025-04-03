@@ -1,0 +1,36 @@
+name: Docker Build Request
+description: Request a Docker image build and push
+title: "[Docker Build] "
+labels:
+  - Docker Build
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # ↑↑↑↑↑ 填写crproxy的版本 ↑↑↑↑↑
+        ## 自动化镜像构建
+
+  - type: checkboxes
+    id: image_name
+    attributes:
+      label: Build image name
+      description: 构建镜像的名称选择
+      options:
+        - label: cleverest/test
+
+  - type: input
+    id: version
+    attributes:
+      label: Version to Build
+      description: 构建和推送的tag (e.g., v0.8.0-rc.10, latest, dev)
+      placeholder: dev
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: push_latest
+    attributes:
+      label: Push with latest
+      description: 是否推送 latest 版本
+      options:
+        - label: latest

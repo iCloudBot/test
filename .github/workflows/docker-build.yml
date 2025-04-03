@@ -1,0 +1,81 @@
+name: Docker Build Workflow
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  build:
+    name: Docker Build and Push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker-container
+
+      - name: Extract issue details
+        id: extract
+        run: |
+          VERSION=$(echo "${{ github.event.issue.title }}")
+          IMAGE_NAME_1=$(echo "${{ github.event.issue.body }}" | awk '/- \[[xX]\] cleverest\/test/ {print "cleverest/test"}')
+          IMAGE_NAME_2=$(echo "${{ github.event.issue.body }}" | awk '/- \[[xX]\] registry.cn-chengdu.aliyuncs.com/ {print "registry.cn-chengdu.aliyuncs.com/dockerip/cr-gh-nginx"}')
+          TAG=$(echo "${{ github.event.issue.body }}" | awk '/^### Version to Build/ {getline; getline; print}' | tr -d '[:space:]')
+          LATEST=$(echo "${{ github.event.issue.body }}" | awk '/- \[[xX]\] latest/ {print "true"}')
+
+          if [[ "$TAG" == "_Noresponse_" ]]; then
+            TAG="dev"
+          fi
+
+          if [[ "$IMAGE_NAME_2" == *aliyuncs.com* ]]; then
+            echo "needs_acr_login=true" >> $GITHUB_ENV
+          else
+            echo "needs_acr_login=false" >> $GITHUB_ENV
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_ENV
+          echo "image_name_1=$IMAGE_NAME_1" >> $GITHUB_ENV
+          echo "image_name_2=$IMAGE_NAME_2" >> $GITHUB_ENV
+          echo "tag=$TAG" >> $GITHUB_ENV
+          echo "latest=$LATEST" >> $GITHUB_ENV
+
+      - name: Login to Ali ACR
+        if: env.needs_acr_login == 'true'
+        uses: aliyun/acr-login@v1
+        with:
+          login-server: https://registry.cn-chengdu.aliyuncs.com
+          username: ${{ secrets.Ali_ACR_USERNAME }}
+          password: ${{ secrets.Ali_ACR_PASSWORD }}
+
+      - name: Login to Docker Hub
+        if: env.needs_acr_login == 'false'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Docker Image
+        run: |
+          IMAGES=()
+          [[ -n "${{ env.image_name_1 }}" ]] && IMAGES+=("${{ env.image_name_1 }}")
+          [[ -n "${{ env.image_name_2 }}" ]] && IMAGES+=("${{ env.image_name_2 }}")
+
+          cd ${{ github.workspace }}/docker
+          for IMAGE in "${IMAGES[@]}"; do
+            if [[ "$IMAGE" == *aliyuncs.com* ]]; then
+              docker buildx build --build-arg VERSION=${{ env.version }} --platform linux/amd64 -t $IMAGE:${{ env.tag }} -t $IMAGE:latest -f Dockerfile --push .
+            elif [[ "${{ env.tag }}" == "dev" ]]; then
+              docker buildx build --build-arg VERSION=${{ env.version }} --platform linux/amd64 -t $IMAGE:${{ env.tag }} --push .
+            else
+              docker buildx build --build-arg VERSION=${{ env.version }} --platform linux/amd64,linux/386,linux/arm/v6,linux/arm/v7,linux/arm64 -t $IMAGE:${{ env.tag }} --push .
+              if [[ "${{ env.latest }}" == "true" ]]; then
+                docker buildx build --build-arg VERSION=${{ env.version }} --platform linux/amd64,linux/386,linux/arm/v6,linux/arm/v7,linux/arm64 -t $IMAGE:latest --push .
+              fi
+            fi
+          done
+
+          docker system prune -a -f
