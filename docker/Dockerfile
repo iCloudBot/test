@@ -39,4 +39,4 @@ ARG VERSION=v0.8.0
 
 EXPOSE 80 443
 
-#ENTRYPOINT ["entrypoint"]
+ENTRYPOINT ["entrypoint"]
